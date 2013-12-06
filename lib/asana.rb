@@ -117,7 +117,10 @@ class Asana
 
   # get the tasks within a project
   def self.tasks_for_project project_id, use_cache=true
-    self.tasks(project_id, use_cache).collect{|t|
+    tasks = self.tasks(project_id, use_cache).select{|t|
+      # is this task a header?
+      t["name"][-1] != ':'
+    }.collect{|t|
       self.task t["id"], use_cache
     }
   end
@@ -157,6 +160,14 @@ class Asana
       # keep in the array if the tag is present
       t["tags"].select{|t| t["id"] == tag_id}.count > 0
     }
+  end
+  # get the tasks within a project which are completed
+  def self.completed_tasks_for_project project_id
+    self.tasks_for_project(project_id).select{|t| t["completed"]}
+  end
+  # get the tasks within a project which are NOT completed
+  def self.uncompleted_tasks_for_project project_id
+    self.tasks_for_project(project_id).select{|t| ! t["completed"]}
   end
   # helpers to get tagged tasks with in a project
   def self.milestone_tasks_for_project(id); self.tagged_tasks_for_project(id, @@milestone_tag_id); end
@@ -271,13 +282,14 @@ class Asana
     self.current_projects.collect{|p|
       project = {
         name: p["name"],
-        task_count: self.tasks_for_project(p["id"]).count,
+        open_task_count: self.completed_tasks_for_project(p["id"]).count,
+        closed_task_count: self.uncompleted_tasks_for_project(p["id"]).count,
         milestones: self.milestone_tasks_for_project(p["id"]).collect{|t|
           {
             name: t["name"],
             due: t["due_on"],
             notes: t["notes"],
-            assignee: (t["assignee"].present? ? t["assignee"] : nil)
+            assignee: (t["assignee"].present? ? ( Asana.team_members[t["assignee"]["id"].to_s].merge(t["assignee"]) ) : nil)
           }
         }
       }
