@@ -78,6 +78,7 @@ class Asana
 
   end
 
+
   # fetching data remotely from asana
   ##########################################################################################################
 
@@ -135,6 +136,7 @@ class Asana
     tasks
   end
 
+
   # filtering data locally
   ##########################################################################################################
 
@@ -184,6 +186,71 @@ class Asana
   end
 
 
+  # enrich Asana results
+  ##########################################################################################################
+
+  def self.team_members
+    {
+      '5839263971963' => {
+        photo: 'http://tech.bellycard.com/assets/img/team/aj-self.jpg',
+        name: "Aj Self"
+      },
+      '5839263971973' => {
+        photo: 'http://tech.bellycard.com/assets/img/team/chris-ingebrigtsen.jpg',
+        name: "Chris Ingebrigtsen"
+      },
+      '7333041694564' => {
+        photo: 'http://tech.bellycard.com/assets/img/team/christian-vozar.jpg',
+        name: "Christian Vozar"
+      },
+      '4121204866338' => {
+        photo: 'http://tech.bellycard.com/assets/img/team/craig-ulliott.jpg',
+        name: "Craig Ulliott"
+      },
+      '4339385349455' => {
+        photo: 'http://tech.bellycard.com/assets/img/team/daniel-mason.jpg',
+        name: "Daniel Mason"
+      },
+      '5839263971983' => {
+        photo: 'http://tech.bellycard.com/assets/img/team/darby-frey.jpg',
+        name: "Darby Frey"
+      },
+      '5839263971993' => {
+        photo: 'http://tech.bellycard.com/assets/img/team/dave-arel.jpg',
+        name: "Dave Arel"
+      },
+      '6654705164517' => {
+        photo: 'http://tech.bellycard.com/assets/img/team/eric-kerr.jpg',
+        name: "Eric Kerr"
+      },
+      '5839335517481' => {
+        photo: 'http://tech.bellycard.com/assets/img/team/jay-o-connor.jpg',
+        name: "Jay O'Connor"
+      },
+      '7416710640880' => {
+        photo: 'http://tech.bellycard.com/assets/img/team/joe-divita.jpg',
+        name: "Joe Divita"
+      },
+      '5839263972008' => {
+        photo: 'http://tech.bellycard.com/assets/img/team/jon-white.jpg',
+        name: "Jon White"
+      },
+      '5839263972018' => {
+        photo: 'http://tech.bellycard.com/assets/img/team/kevin-reedy.jpg',
+        name: "Kevin Reedy"
+      },
+      '5839084828068' => {
+        photo: 'http://tech.bellycard.com/assets/img/team/kyle-mcconnell.jpg',
+        name: "Kyle Mcconnell"
+      },
+      '5840757402844' => {
+        photo: 'http://tech.bellycard.com/assets/img/team/shay-howe.jpg',
+        name: "Shay Howe"
+      }
+    }
+  end
+
+
   # summarizing and representing Asana data
   ##########################################################################################################
 
@@ -198,6 +265,7 @@ class Asana
   def self.is_chore task
   end
 
+
   # a business level summary of the current projects
   def self.current_projects_summary
     self.current_projects.collect{|p|
@@ -209,7 +277,7 @@ class Asana
             name: t["name"],
             due: t["due_on"],
             notes: t["notes"],
-            assignee: (t["assignee"].present? ? t["assignee"]["name"] : nil)
+            assignee: (t["assignee"].present? ? t["assignee"] : nil)
           }
         }
       }
@@ -218,8 +286,18 @@ class Asana
     }
   end
 
-  # a business level summary of the planned projects
-  def self.planned_projects_summary
+  # a business level summary of the planned projects which are not yet started
+  def self.upcomming_projects_summary
+    self.planned_projects.collect{|p|
+      {
+        name: p["name"],
+        notes: p["notes"]
+      }
+    }
+  end
+
+  # a business level summary of the projects we are still planning
+  def self.project_factory_summary
     self.current_projects.collect{|p|
       {
         name: p["name"],
@@ -229,7 +307,7 @@ class Asana
   end
 
   # a business level summary of the current bugs and chores for each product
-  def self.bugs_and_chores_projects_summary
+  def self.products_summary
     self.bugs_and_chores_projects.collect{|p|
       {
         name: p["name"],
@@ -240,8 +318,14 @@ class Asana
   end
 
   # a business level summary of the current bugs and chores for each product
-  def self.users_summary
-    user_summary = {}
+  def self.team_members_summary
+
+    team_members = self.team_members
+    team_members.each do |k, v|
+      team_members[k][:id] = k
+      team_members[k][:bugs_count] = 0
+      team_members[k][:chores_count] = 0
+    end
     
     # get all the projects in the bugs and chores team
     self.bugs_and_chores_projects.each do |project|
@@ -252,28 +336,18 @@ class Asana
         is_bug = self.is_bug(task)
         is_chore = self.is_chore(task)
 
-        # skip tasks which do not have an assignee or are neither a bug or a chore
-        next unless task["assignee"].present? and (is_bug or is_chore)
+        # skip tasks which are not assigned to one of our team members or are neither a bug or a chore
+        next unless task["assignee"].present? and (is_bug or is_chore) and team_members[task["assignee"]["id"]].present?
         
-        # use a hash table to organize projects by asignee
         assignee_id = task["assignee"]["id"]
 
-        # create the structure if its the first time we've seen this user
-        unless user_summary[assignee_id].present?
-          user_summary[assignee_id] = {
-            name: task["assignee"]["name"], 
-            bugs: 0, 
-            chores: 0
-          } 
-        end
-
-        user_summary[assignee_id][:bugs] += 1 if self.is_bug(task)
-        user_summary[assignee_id][:chores] += 1 if self.is_chore(task)
+        user_summary[assignee_id][:bugs_count] += 1 if self.is_bug(task)
+        user_summary[assignee_id][:chores_count] += 1 if self.is_chore(task)
 
       end
     end
 
-    user_summary
+    team_members.collect{|tm| tm[1]}
   end
 
 end
