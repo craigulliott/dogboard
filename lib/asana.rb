@@ -282,6 +282,7 @@ class Asana
     self.current_projects.collect{|p|
       project = {
         name: p["name"],
+        notes: p["notes"],
         open_task_count: self.completed_tasks_for_project(p["id"]).count,
         closed_task_count: self.uncompleted_tasks_for_project(p["id"]).count,
         milestones: self.milestone_tasks_for_project(p["id"]).collect{|t|
